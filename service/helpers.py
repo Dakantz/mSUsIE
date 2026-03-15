@@ -1,4 +1,3 @@
-
 from PIL import Image
 import pandas as pd
 
@@ -6,41 +5,47 @@ import regex as rg
 import glob
 from tqdm.notebook import tqdm
 
-def openImg(p:str):
+
+def openImg(p: str):
     try:
-        img=Image.open(p)
+        img = Image.open(p)
         return img
     except Exception as e:
         print(e)
         return None
-    
-def create_ground_truth_dicts():
-    qrels_df = pd.read_csv('data/qrels_simplified.csv')
-    queries_df = pd.read_csv('data/queries.csv')
-    merged_df = pd.merge(qrels_df, queries_df, on='qid')
 
-    merged_df['path'] = merged_df['path'].apply(lambda p:" ".join(rg.split(r'[\\|/_\\.-]', p)).strip())
+
+def create_ground_truth_dicts():
+    qrels_df = pd.read_csv("data/qrels_simplified.csv")
+    queries_df = pd.read_csv("data/queries.csv")
+    merged_df = pd.merge(qrels_df, queries_df, on="qid")
+
+    merged_df["path"] = merged_df["path"].apply(
+        lambda p: " ".join(rg.split(r"[\\|/_\\.-]", p)).strip()
+    )
 
     ground_truth_de = {}
     ground_truth_en = {}
 
     for index, row in merged_df.iterrows():
-        query_de = row['query_de']
-        query_en = row['query_en']
-        path = row['path']
+        query_de = row["query_de"]
+        query_en = row["query_en"]
+        path = row["path"]
         ground_truth_de.setdefault(query_de, []).append(path)
         ground_truth_en.setdefault(query_en, []).append(path)
 
     return ground_truth_de, ground_truth_en
 
+
 def check_for_invalid_imgs():
-    img_paths=glob.glob("data/Cliparts/01_Kate Hadfield/**/*.png", recursive=True)
+    img_paths = glob.glob("data/Cliparts/01_Kate Hadfield/**/*.png", recursive=True)
 
     for file in tqdm(img_paths):
         try:
             img = Image.open(file)
         except Exception as e:
             print("Bad file: ", file)
+
 
 def precision_air(target, pred, k=10):
     rel_set = set(target)
@@ -58,15 +63,6 @@ def precision_air(target, pred, k=10):
     precision = tp / (tp + fp)
     return precision
 
-from pymilvus import (
-    connections,
-    utility,
-    FieldSchema,
-    CollectionSchema,
-    DataType,
-    Collection,
-)
+
 cliparts = None
 cliparts_txt = None
-def milvus_connect():
-    connections.connect("default", host="localhost", port="19530")

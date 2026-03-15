@@ -3,8 +3,6 @@ from flask import request, Response, jsonify
 from PIL import Image
 import base64
 from sentence_transformers import SentenceTransformer
-import torch
-from helpers import *
 from io import BytesIO
 import re
 

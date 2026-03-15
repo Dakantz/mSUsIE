@@ -1,0 +1,24 @@
+[project]
+name = "msusie"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "accelerate>=1.12.0",
+    "einops>=0.8.2",
+    "imageio>=2.37.2",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
+    "multilingual-clip>=1.0.10",
+    "numpy>=2.4.2",
+    "open-clip-torch>=3.2.0",
+    "pandas>=3.0.0",
+    "pgvector>=0.4.2",
+    "pillow>=12.1.1",
+    "psycopg2-binary>=2.9.11",
+    "sentence-transformers>=5.2.2",
+    "sqlalchemy>=2.0.46",
+    "torch>=2.10.0",
+    "transformers>=5.1.0",
+]
