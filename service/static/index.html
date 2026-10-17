@@ -24,7 +24,7 @@
             margin: 0 0 16px;
         }
 
-        input {
+        .query_input {
             margin: 20px;
             width: 80%;
             height: 30px;
@@ -59,6 +59,14 @@
             overflow: hidden;
             white-space: nowrap;
         }
+        .checkbox {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+            font-size: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 
@@ -79,6 +87,7 @@
                 ctx: null,
                 canvas: null,
                 diddraw: false,
+                include_drawing: false,
 
             },
             results: [],
@@ -112,11 +121,12 @@
                 this.query = document.getElementById("query_txt").value
                 this.init_canvas()
                 console.log("enddraw")
+                let send_draw = this.img_query.include_drawing && this.img_query.diddraw
                 const imageData = this.img_query.canvas.toDataURL('image/png');
                 let weigh = 0.5
-                if (this.img_query.diddraw && this.query.length > 0) {
+                if (send_draw && this.query.length > 0) {
                     weigh = 0.5
-                } else if (this.img_query.diddraw) {
+                } else if (send_draw) {
                     weigh = 1.0
                 } else if (this.query.length > 0) {
                     weigh = 0.0
@@ -127,7 +137,7 @@
                         "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
-                        "image": this.img_query.diddraw ? imageData : undefined,
+                        "image": send_draw ? imageData : undefined,
                         "query": this.query,
                         "img_weight": weigh,
                     })
@@ -153,12 +163,16 @@
 
     <h1>mSUsIE</h1>
     <div v-scope>
-        <input id="query_txt" @change="enddraw" placeholder="draw or write a query!"></input>
+        <input class="query_input" id="query_txt" @change="enddraw" placeholder="draw or write a query!"></input>
         <br>
         <canvas id="canvas" width="500" height="300" style="border:1px solid #000000;" @mousemove="mousemove"
             @mouseup="enddraw" @mouseleave="enddraw" @mousedown="mousedown"></canvas>
         <br>
         <button @click="cleardraw">Clear</button>
+        <div class="checkbox">
+            <input type="checkbox" id="query_drawing" name="query_drawing" value="query_drawing" v-model="img_query.include_drawing">
+            <label for="query_drawing">Include Drawing</label>
+        </div>
         <br>
         <div v-if="results.length > 0">
             <h2>Results</h2>
