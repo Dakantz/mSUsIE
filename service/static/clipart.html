@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mSUsIE: Clipart</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <script type="module">
+        import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+        const id = new URLSearchParams(location.search).get('id')
+        const get = async (url) => {
+            const r = await fetch(url)
+            if (!r.ok) throw new Error(r.status)
+            return r.json()
+        }
+
+        let clipart = null, similar = [], error = id ? null : 'Keine Clipart-ID angegeben.'
+        if (id) {
+            try {
+                [clipart, similar] = await Promise.all([
+                    get(`/clipart/${id}`),
+                    get(`/clipart/${id}/similar?limit=20`),
+                ])
+            } catch (err) {
+                error = `Clipart ${id} konnte nicht geladen werden (${err.message}).`
+            }
+        }
+
+        createApp({ clipart, similar, error }).mount()
+
+        // slow (UMAP runs per request): loaded after mount so the page renders first
+        if (id) plot(id)
+
+        async function plot(id) {
+            const box = document.getElementById('plot')
+            try {
+                const [d3, points] = await Promise.all([
+                    import('https://cdn.jsdelivr.net/npm/d3@7/+esm'),
+                    get(`/clipart/${id}/neighbourhood?limit=500`),
+                ])
+                box.textContent = ''
+                draw(d3, box, points, Number(id))
+            } catch (err) {
+                box.className = 'empty'
+                box.textContent = `Nachbarschaft konnte nicht geladen werden (${err.message}).`
+            }
+        }
+
+        function draw(d3, box, points, id) {
+            const w = box.clientWidth, h = 260, pad = 10
+            const x = d3.scaleLinear(d3.extent(points, p => p.x), [pad, w - pad])
+            const y = d3.scaleLinear(d3.extent(points, p => p.y), [h - pad, pad])
+            const tip = d3.select(box).append('div').attr('class', 'plot_tip')
+
+            d3.select(box).append('svg')
+                .attr('width', w).attr('height', h)
+                .selectAll('circle').data(points).join('circle')
+                .attr('cx', p => x(p.x)).attr('cy', p => y(p.y))
+                .attr('r', p => p.clipart_id === id ? 5 : 2.5)
+                .attr('class', p => p.clipart_id === id ? 'dot self' : 'dot')
+                .on('mouseenter', (e, p) => {
+                    tip.selectAll('*').remove()
+                    tip.append('img').attr('src', p.path).attr('alt', '')
+                    tip.append('span').text(p.name)
+                    tip.style('display', 'block')
+                        .style('left', `${Math.min(x(p.x) + 12, w - 130)}px`)
+                        .style('top', `${Math.max(y(p.y) - 70, 0)}px`)
+                })
+                .on('mouseleave', () => tip.style('display', 'none'))
+                .on('click', (e, p) => { location.href = `clipart.html?id=${p.clipart_id}` })
+        }
+    </script>
+
+    <header>
+        <a class="home" href="index.html">
+            <span class="brand">mSUsIE</span>
+            <span class="tagline">Clipart-Details</span>
+        </a>
+        <a class="back" href="index.html">&larr; zurück zur Suche</a>
+    </header>
+
+    <main v-scope>
+        <div class="col">
+            <section class="panel">
+                <div v-if="clipart">
+                    <div class="detail_thumb"><img :src="clipart.path" :alt="clipart.name"></div>
+                    <div class="detail_info">
+                        <div class="name">{{ clipart.name }}</div>
+                        <div>ID {{ clipart.clipart_id }}</div>
+                        <div>{{ clipart.path }}</div>
+                    </div>
+                </div>
+                <div class="empty" v-else>{{ error || 'Nichts anzuzeigen.' }}</div>
+            </section>
+
+            <section class="panel">
+                <div class="results_head">Nachbarschaft <span class="count">500 nächste</span></div>
+                <div id="plot" class="plot">Projektion&hellip;</div>
+            </section>
+        </div>
+
+        <section class="panel">
+            <div class="results_head">
+                Ähnlich <span class="count" v-if="similar.length">{{ similar.length }}</span>
+            </div>
+            <div class="results" v-if="similar.length > 0">
+                <a v-for="result in similar" class="result" :href="`clipart.html?id=${result.clipart_id}`">
+                    <div class="thumb"><img :src="result.path" :alt="result.name" loading="lazy"></div>
+                    <div class="result_text" :title="result.name">{{ result.name }}</div>
+                </a>
+            </div>
+            <div class="empty" v-else>{{ error || 'Nichts anzuzeigen.' }}</div>
+        </section>
+    </main>
+</body>
+
+</html>

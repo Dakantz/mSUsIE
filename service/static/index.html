@@ -1,128 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 
 <head>
-    <title>mSUsIE: Interactive</title>
     <meta charset="utf-8">
-    <style>
-        body {
-            font-family: sans-serif;
-            font-size: 14px;
-            line-height: 1.5;
-            margin: 0;
-            padding: 0;
-            text-align: center;
-        }
-
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            margin: 0 0 16px;
-        }
-
-        p {
-            margin: 0 0 16px;
-        }
-
-        .query_input {
-            margin: 20px;
-            width: 80%;
-            height: 30px;
-            font-size: 20px;
-            text-align: center;
-        }
-
-        .results {
-            display: flex;
-            flex-direction: row;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .result {
-            text-overflow: ellipsis;
-            margin: 10px;
-            width: 200px;
-            height: 250px;
-            text-align: center;
-        }
-
-        .result>img {
-            border: 1px solid black;
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        .result_text {
-            text-overflow: ellipsis;
-            overflow: hidden;
-            white-space: nowrap;
-        }
-        .checkbox {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-top: 10px;
-            font-size: 20px;
-            text-align: center;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>mSUsIE: Interaktiv</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <script src="https://unpkg.com/petite-vue" defer></script>
     <script type="module">
         import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+        const SAVE_KEY = 'msusie_last_query'
 
         createApp({
             // exposed to all expressions
             query: "",
             img_query: {
-                img: null,
-                draw: {
-                    x: 0,
-                    y: 0,
-                },
+                draw: { x: 0, y: 0 },
                 ctx: null,
                 canvas: null,
                 diddraw: false,
                 include_drawing: false,
-
             },
             results: [],
+            searched: false,
             init_canvas() {
                 if (this.img_query.ctx == null) {
                     this.img_query.canvas = document.getElementById("canvas");
                     this.img_query.ctx = this.img_query.canvas.getContext("2d");
+                    this.img_query.ctx.lineWidth = 3;
+                    this.img_query.ctx.lineCap = "round";
+                    this.img_query.ctx.lineJoin = "round";
                 }
+            },
+            // canvas is displayed scaled, map CSS pixels onto the backing store
+            pos(e) {
+                let c = this.img_query.canvas
+                let s = c.width / c.clientWidth
+                return { x: e.offsetX * s, y: e.offsetY * s }
             },
             // methods
             mousedown(e) {
                 this.init_canvas()
-                this.img_query.draw.x = e.offsetX
-                this.img_query.draw.y = e.offsetY
+                this.img_query.draw = this.pos(e)
             },
             mousemove(e) {
                 this.init_canvas()
                 let ctx = this.img_query.ctx
                 if (e.buttons == 1) {
                     this.img_query.diddraw = true
+                    let p = this.pos(e)
                     ctx.beginPath();
                     ctx.moveTo(this.img_query.draw.x, this.img_query.draw.y);
-                    ctx.lineTo(e.offsetX, e.offsetY);
+                    ctx.lineTo(p.x, p.y);
                     ctx.stroke();
-                    this.img_query.draw.x = e.offsetX
-                    this.img_query.draw.y = e.offsetY
+                    this.img_query.draw = p
                 }
             },
 
             async enddraw(e) {
                 this.query = document.getElementById("query_txt").value
                 this.init_canvas()
-                console.log("enddraw")
                 let send_draw = this.img_query.include_drawing && this.img_query.diddraw
+                if (!send_draw && this.query.length == 0) return
                 const imageData = this.img_query.canvas.toDataURL('image/png');
+                this.save(imageData)
                 let weigh = 0.5
                 if (send_draw && this.query.length > 0) {
                     weigh = 0.5
@@ -139,50 +83,96 @@
                     body: JSON.stringify({
                         "image": send_draw ? imageData : undefined,
                         "query": this.query,
-                        "img_weight": weigh,
+                        "weight": weigh,
                     })
                 };
 
                 fetch('/query-image', options)
                     .then(response => response.json())
                     .then(response => {
-                        console.log(response)
                         this.results = response
-                        // this.query = ""
+                        this.searched = true
                     })
                     .catch(err => console.error(err));
             },
+            save(image) {
+                try {
+                    localStorage.setItem(SAVE_KEY, JSON.stringify({
+                        query: this.query,
+                        image: this.img_query.diddraw ? image : null,
+                        include_drawing: this.img_query.include_drawing,
+                    }))
+                } catch (err) { /* storage full or disabled, not worth failing the search */ }
+            },
+            restore() {
+                let saved = null
+                try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)) } catch (err) { return }
+                if (!saved) return
+                this.query = saved.query || ""
+                document.getElementById("query_txt").value = this.query
+                this.img_query.include_drawing = !!saved.include_drawing
+                if (!saved.image) {
+                    if (this.query) this.enddraw()
+                    return
+                }
+                this.init_canvas()
+                const img = new Image()
+                img.onload = () => {
+                    this.img_query.ctx.drawImage(img, 0, 0)
+                    this.img_query.diddraw = true
+                    this.enddraw()
+                }
+                img.src = saved.image
+            },
             cleardraw(e) {
+                this.init_canvas()
+                localStorage.removeItem(SAVE_KEY)
                 this.img_query.diddraw = false
-                this.img_query.ctx.clearRect(0, 0, 500, 300);
+                let c = this.img_query.canvas
+                this.img_query.ctx.clearRect(0, 0, c.width, c.height);
                 this.results = []
+                this.searched = false
             }
 
         }).mount()
     </script>
 
-    <h1>mSUsIE</h1>
-    <div v-scope>
-        <input class="query_input" id="query_txt" @change="enddraw" placeholder="draw or write a query!"></input>
-        <br>
-        <canvas id="canvas" width="500" height="300" style="border:1px solid #000000;" @mousemove="mousemove"
-            @mouseup="enddraw" @mouseleave="enddraw" @mousedown="mousedown"></canvas>
-        <br>
-        <button @click="cleardraw">Clear</button>
-        <div class="checkbox">
-            <input type="checkbox" id="query_drawing" name="query_drawing" value="query_drawing" v-model="img_query.include_drawing">
-            <label for="query_drawing">Include Drawing</label>
-        </div>
-        <br>
-        <div v-if="results.length > 0">
-            <h2>Results</h2>
-            <div class="results">
-                <div v-for="result in results" class="result">
-                    <div class="result_text">{{result.text}}</div>
-                    <img :src="result.path" width="200">
-                </div>
-            </div>
+    <header>
+        <a class="home" href="index.html">
+            <span class="brand">mSUsIE</span>
+            <span class="tagline">multimodal Search Using Image Encoders / multimodale Clipart-Suche</span>
+        </a>
+    </header>
 
+    <main v-scope @vue:mounted="restore()">
+        <section class="panel">
+            <input class="query_input" id="query_txt" @change="enddraw" placeholder="Zeichnen oder Suchbegriff eingeben…">
+            <canvas id="canvas" width="400" height="400" @mousemove="mousemove" @mouseup="enddraw"
+                @mouseleave="enddraw" @mousedown="mousedown"></canvas>
+            <div class="controls">
+                <label class="checkbox" for="query_drawing">
+                    <input type="checkbox" id="query_drawing" v-model="img_query.include_drawing">
+                    Zeichnung einbeziehen
+                </label>
+                <button @click="cleardraw">Löschen</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="results_head">
+                Ergebnisse <span class="count" v-if="results.length">{{ results.length }}</span>
+            </div>
+            <div class="results" v-if="results.length > 0">
+                <a v-for="result in results" class="result" :href="`clipart.html?id=${result.clipart_id}`">
+                    <div class="thumb"><img :src="result.path" :alt="result.name" loading="lazy"></div>
+                    <div class="result_text" :title="result.name">{{ result.name }}</div>
+                </a>
+            </div>
+            <div class="empty" v-else>
+                {{ searched ? 'Keine Treffer.' : 'Suchbegriff eingeben oder etwas zeichnen.' }}
+            </div>
+        </section>
+    </main>
 </body>
 
 </html>
